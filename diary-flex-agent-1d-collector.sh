@@ -93,7 +93,7 @@ collect_os_listen_port() {
                 "diaryEventActor=diary-flex-1d-collector.sh" \
                 "tcp_protocol=$(echo "$line" | awk '{print $1}')" \
                 "service_name=$(echo "$line" | awk '{print $NF}')" \
-                "port_number=$(echo "$line" | awk '{print $(NF-1)}' | cut -d: -f2)" \
+                "port_number=$(echo "$line" | awk '{print $(NF-1)}' | cut -d: -f2)"
         done <<< "$OS_LISTEN_PORT_DATA"
 
 }
@@ -107,6 +107,8 @@ main() {
 
 	#Collect os version from lsb_release
 	collect_os_lsb_release
+
+        collect_os_listen_port
 }
 
 main "$@"
