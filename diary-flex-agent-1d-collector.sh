@@ -83,18 +83,20 @@ collect_os_lsb_release() {
                 "codename=${OS_LSB_RELEASE_DATA[10]}"
 }
 collect_os_listen_port() {
-    OS_LISTEN_PORT_STR=$(netstat -tulpn)
-    while read -r line; do
-        diary_report \
-        "diaryEventStatus=$?" \
-        "diaryEventType=diary_flex" \
-        "diaryEventSourceType=diary_flex_os_LISTEN_PORT" \
-        "diaryEventActor=diary-flex-1d-collector.sh" \
-        "tcp_protocol=$(echo "$line" | awk '{print $1}')" \
-        "service_name=$(echo "$line" | awk '{print $NF}')" \
-        "port_number=$(echo "$line" | awk '{print $(NF-1)}' | cut -d: -f2)" \
-        done <<< "$OS_LISTEN_PORT_STR"
+        OS_LISTEN_PORT_STR=$(netstat -tulpn)
+        OS_LISTEN_PORT_DATA=( $OS_LISTEN_PORT_STR )
+        while read -r line; do
+                diary_report \
+                "diaryEventStatus=$?" \
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_LISTEN_PORT" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "tcp_protocol=$(echo "$line" | awk '{gsub(/ /,"",$1);print $1}')" \
+                "service_name=$(echo "$line" | awk '{gsub(/ /,"",$NF);print $NF}')" \
+                "port_number=$(echo "$line" | awk '{gsub(/ /,"",$(NF-1));split($(NF-1),a,":");print a[2]}' )" 
+        done <<< "$OS_LISTEN_PORT_DATA"
 }
+
 
 
 main() {
