@@ -6,18 +6,20 @@
 # Description : Script used for send flex data to Cloud Platform Diary
 
 #Collector Script URLs
-UNAME_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex-agent/diary-flex-agent-collector/uname-collector.sh"
+OS_UNAME_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-uname-collector.sh"
+OS_USER_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-user-collector.sh"
+OS_LSB_RELEASE_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-lsb-release-collector.sh"
 
 diary_report() {
     MODULE_FILENAME="cloud-platform-diary.sh"
     MODULE_PATH="/tmp/.diary"
-    MODULE_URL="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex-agent/$MODULE_FILENAME"
+    MODULE_URL="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/$MODULE_FILENAME"
     MODULE_PARAMS=$(echo "$@")
 
     if [ $(( ( $(date +%s) - $(stat -L --format %Y $MODULE_PATH/$MODULE_FILENAME 2>/dev/null || printf '0') ) > 60 )) -eq 1 ]; then
         wget --wait=3 --tries=2 -N "$MODULE_URL" -P "$MODULE_PATH" 2>/dev/null
         if [ $? -ne 0 ]; then
-            printf "[diary-flex-agent-1d-collector] Fetch module %s error on URL %s: diary-error-fetch-module-failed\n" "$MODULE_FILENAME" "$MODULE_URL" >&2
+            printf "[diary-flex-1d-collector] Fetch module %s error on URL %s: diary-flex-1d-collector-error-fetch-module-failed\n" "$MODULE_FILENAME" "$MODULE_URL" >&2
         fi
                 chmod 0755 $MODULE_PATH/$MODULE_FILENAME
     fi
@@ -39,37 +41,72 @@ fetch_module() {
         bash ./$MODULE_FILENAME $MODULE_PARAMS
 }
 
-collect_uname() {
-	UNAME_STR="$(fetch_module $UNAME_COLLECTOR)"
-	UNAME_DATA=( $UNAME_STR )
+collect_os_uname() {
+	OS_UNAME_STR="$(fetch_module $OS_UNAME_COLLECTOR)"
+	OS_UNAME_DATA=( $OS_UNAME_STR )
         diary_report \
                 "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex_agent_run" \
-                "diaryEventSourceType=diary_flex_agent" \
-                "diaryEventActor=diary-flex-agent-1d-collector.sh" \
-                "kernelName=${UNAME_DATA[0]}" \
-                "kernelRelease=${UNAME_DATA[2]}" \
-		"kernelVersion=${UNAME_DATA[3]}_${UNAME_DATA[4]}_${UNAME_DATA[5]}_${UNAME_DATA[6]}_${UNAME_DATA[7]}_${UNAME_DATA[8]}_${UNAME_DATA[9]}_${UNAME_DATA[10]}" \
-		"machine=${UNAME_DATA[11]}" \
-		"processor=${UNAME_DATA[12]}" \
-		"hardwarePlatform=${UNAME_DATA[13]}" \
-		"operatingSystem=${UNAME_DATA[14]}"
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_uname" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "kernelName=${OS_UNAME_DATA[0]}" \
+                "kernelRelease=${OS_UNAME_DATA[2]}" \
+		"kernelVersion=${OS_UNAME_DATA[3]}_${OS_UNAME_DATA[4]}_${OS_UNAME_DATA[5]}_${OS_UNAME_DATA[6]}_${OS_UNAME_DATA[7]}_${OS_UNAME_DATA[8]}_${OS_UNAME_DATA[9]}_${OS_UNAME_DATA[10]}" \
+		"machine=${OS_UNAME_DATA[11]}" \
+		"processor=${OS_UNAME_DATA[12]}" \
+		"hardwarePlatform=${OS_UNAME_DATA[13]}" \
+		"operatingSystem=${OS_UNAME_DATA[14]}"
 }
-collect_users() {
-	USERS_STR="$(fetch_module $USERS_COLLECTOR)"
-	USERS_DATA=( $USERS_STR )
+
+collect_os_user() {
+	OS_USER_STR="$(fetch_module $OS_USER_COLLECTOR)"
+	OS_USER_DATA=( $OS_USER_STR )
         diary_report \
                 "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex_agent_run" \
-                "diaryEventSourceType=diary_flex_agent_users" \
-                "diaryEventActor=diary-flex-agent-1d-collector.sh" \
-                "listusers=${USERS_DATA}" \
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_user" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "listUsers=${OS_USER_DATA}" 
+}
+
+collect_os_lsb_release() {
+        OS_LSB_RELEASE_STR="$(fetch_module $OS_LSB_RELEASE_COLLECTOR)"
+        OS_LSB_RELEASE_DATA=( $OS_LSB_RELEASE_STR )
+        diary_report \
+                "diaryEventStatus=$?" \
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_lsb_release" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "distributorId=${OS_LSB_RELEASE_DATA[2]}" \
+                "description=${OS_LSB_RELEASE_DATA[4]}_${OS_LSB_RELEASE_DATA[5]}_${OS_LSB_RELEASE_DATA[6]}" \
+                "release=${OS_LSB_RELEASE_DATA[8]}" \
+                "codename=${OS_LSB_RELEASE_DATA[10]}"
+}
+collect_os_listen_port() {
+        OS_LISTEN_PORT_STR=$(netstat -tulpn)
+        OS_LISTEN_PORT_DATA=( $OS_LISTEN_PORT_STR )
+        while read -r line; do
+                diary_report \
+                "diaryEventStatus=$?" \
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_LISTEN_PORT" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "tcp_protocol=$(echo "$line" | awk '{print $1}')" \
+                "service_name=$(echo "$line" | awk '{print $NF}')" \
+                "port_number=$(echo "$line" | awk '{print $(NF-1)}' | cut -d: -f2)" \
+        done <<< "$OS_LISTEN_PORT_DATA"
+
 }
 
 main() {
-	#Collect uname data
-	collect_uname
-        collect_users
+	#Collect uname
+	collect_os_uname
+
+	#Collect user from /etc/passwd
+        collect_os_user
+
+	#Collect os version from lsb_release
+	collect_os_lsb_release
 }
 
 main "$@"
