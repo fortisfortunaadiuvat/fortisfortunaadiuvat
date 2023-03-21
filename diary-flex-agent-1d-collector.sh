@@ -83,8 +83,7 @@ collect_os_lsb_release() {
                 "codename=${OS_LSB_RELEASE_DATA[10]}"
 }
 collect_os_listen_port() {
-        OS_LISTEN_PORT_STR=$(netstat -tulpn)
-        OS_LISTEN_PORT_DATA=( $OS_LISTEN_PORT_STR )
+        OS_LISTEN_PORT_DATA=$(netstat -tulpn)
         while read -r line; do
                 diary_report \
                 "diaryEventStatus=$?" \
