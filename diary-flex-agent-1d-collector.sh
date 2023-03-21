@@ -92,7 +92,7 @@ collect_os_listen_port() {
                 "diaryEventActor=diary-flex-1d-collector.sh" \
                 "tcp_protocol=$(echo "$line" | awk '{gsub(/ /,"",$1);print $1}')" \
                 "service_name=$(echo "$line" | awk '{gsub(/ /,"",$NF);print $NF}')" \
-                "port_number=$(echo "$line" | awk '{gsub(/ /,"",$(NF-1));split($(NF-1),a,":");print a[2]}' )" 
+                "port_number=$(echo "$line" | awk '{print $4}' | cut -d ':' -f2' )" 
         done <<< "$OS_LISTEN_PORT_DATA"
 }
 
