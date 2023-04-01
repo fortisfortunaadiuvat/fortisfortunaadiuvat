@@ -5,484 +5,382 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
 	"time"
 
 	"github.com/slack-go/slack"
 	entitySlack "github.com/tokopedia/captainmarvel/cloud-platform-diary/internal/entity/slack"
+	"github.com/tokopedia/captainmarvel/cloud-platform-diary/internal/pkg/webhook"
 	"github.com/tokopedia/tdk/go/log"
-	"github.com/tokopedia/tdk/go/sql/sqldb"
 )
 
-type SlackRepo struct {
-	slack       *slack.Client
-	db          *sqldb.DB
-	getQuery    []string
-	insertQuery []string
+type UseCase struct {
+	slackRepo slackRepository
 }
 
-const (
-	getNewRelicIncident = iota
-	getNewRelicIncidentByID
-	getNewRelicIncidentByMsgTimestamp
-	getMessageByTimestamp
-	getMessageByIncidentID
-)
-
-const (
-	insertMessage          = iota
-	insertNewRelicIncident = iota
-	updateNewRelicIncidentByID
-	updateNewRelicIncidentByMsgTimestamp
-	updateNewRelicIncidentStatusByID
-	updateMessageByTimestamp
-)
-
-func New(db *sqldb.DB, slack *slack.Client) (*SlackRepo, error) {
-	getQuery := []string{
-		getNewRelicIncident:               "SELECT slack.message_timestamp, incident.incident_id, name, url, description, owner, generated_by, status, severity, condition_id, labels, root_cause, channel, start_time, recover_time FROM incident INNER JOIN slack ON slack.incident_id = incident.incident_id WHERE incident.incident_id = $1 AND incident.channel = $2",
-		getNewRelicIncidentByID:           "SELECT incident_id, name, url, description, owner, generated_by, status, severity, condition_id, labels, root_cause, channel, start_time, recover_time FROM incident WHERE incident_id = $1 AND channel = $2",
-		getNewRelicIncidentByMsgTimestamp: "SELECT slack.message_timestamp, incident.incident_id, name, url, description, owner, generated_by, status, severity, condition_id, labels, root_cause, channel, start_time, recover_time FROM incident INNER JOIN slack ON slack.incident_id = incident.incident_id WHERE incident.incident_id = $1 AND slack.message_timestamp = $2",
-		getMessageByTimestamp:             "SELECT slack.id, trigger_id, workspace, user_ack, message_timestamp, incident.incident_id FROM slack INNER JOIN incident ON incident.incident_id = slack.incident_id WHERE slack.message_timestamp = $1 AND incident.channel = $2",
-		getMessageByIncidentID:            "SELECT trigger_id, workspace, user_ack, message_timestamp, slack.incident_id FROM slack INNER JOIN incident ON incident.id = slack.incident_id WHERE incident.incident_id = $1 AND incident.channel = $2",
+func New(slack slackRepository) *UseCase {
+	return &UseCase{
+		slackRepo: slack,
 	}
-
-	insertQuery := []string{
-		insertMessage:                        "INSERT INTO slack (trigger_id, workspace, user_ack, message_timestamp, incident_id) VALUES ($1, $2, $3, $4, $5)",
-		insertNewRelicIncident:               "INSERT INTO incident (incident_id, name, url, description, owner, generated_by, status, severity, condition_id, labels, root_cause, channel, start_time, recover_time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
-		updateNewRelicIncidentByID:           "UPDATE incident SET root_cause = $1 WHERE incident_id = $2",
-		updateNewRelicIncidentByMsgTimestamp: "UPDATE incident SET root_cause = $1 WHERE incident_id = $2",
-		updateNewRelicIncidentStatusByID:     "UPDATE incident SET status = $1, recover_time = $2 FROM slack WHERE incident.incident_id = $3 AND incident.channel = $4 AND slack.message_timestamp = $5",
-		updateMessageByTimestamp:             "UPDATE slack SET trigger_id = $1, workspace = $2, user_ack = $3 FROM incident WHERE message_timestamp = $4 AND incident.channel = $5",
-	}
-
-	return &SlackRepo{
-		slack:       slack,
-		db:          db,
-		getQuery:    getQuery,
-		insertQuery: insertQuery,
-	}, nil
 }
 
-func (sr *SlackRepo) GetNewRelicIncident(ctx context.Context, incidentID int, channelID string) (entitySlack.Incident, error) {
-	incident := entitySlack.Incident{}
-	err := sr.db.GetContext(ctx, &incident, sr.getQuery[getNewRelicIncident], incidentID, channelID)
+func (u *UseCase) ProcessIncident(ctx context.Context, data entitySlack.NewRelicReplyThread) (entitySlack.Incident, error) {
+	// Get NewRelic Incident BY incident ID
+	incident, _ := u.slackRepo.GetNewRelicIncident(ctx, data.GetIncidentID(), data.GetChannel())
+	// if err != nil {
+	// 	log.Info("Incident on database not found: %s", err)
+	// }
 
-	return incident, err
-}
+	incidentTs := incident.MessageTimestamp
+	if incidentTs == "" {
+		// Store Incident
+		if err := u.RegisterIncident(ctx, data); err != nil {
+			log.Errorf("Failed send incident request: %v", err)
+		}
 
-func (sr *SlackRepo) GetNewRelicIncidentByID(ctx context.Context, incidentID int, channelID string) (entitySlack.Incident, error) {
-	incident := entitySlack.Incident{}
-	err := sr.db.GetContext(ctx, &incident, sr.getQuery[getNewRelicIncidentByID], incidentID, channelID)
+		// Get NewRelic Incident BY incident ID
+		i, err := u.slackRepo.GetNewRelicIncidentByID(ctx, data.GetIncidentID(), data.GetChannel())
+		if err != nil {
+			log.Errorf("Error GET incident on database: %s", err)
+		}
 
-	return incident, err
-}
+		// Send Slack Message
+		_, ts, err := u.slackRepo.SendMessage(ctx, data.GetChannel(), u.GetMessageSummary(data, i.StartTime, i.RecoverTime), u.GetColor(data), incidentTs, data.GetVendor(), data.GetURL())
+		if err != nil {
+			log.Errorf("Failed send slack message to channel %s because: %s", data.GetChannel(), err)
+		}
 
-func (sr *SlackRepo) GetNewRelicIncidentByMsgTimestamp(ctx context.Context, incidentID int, messageTs string) (entitySlack.Incident, error) {
-	incident := entitySlack.Incident{}
-	err := sr.db.GetContext(ctx, &incident, sr.getQuery[getNewRelicIncidentByMsgTimestamp], incidentID, messageTs)
+		// Store Slack Message
+		triggerID := ""
+		workspace := ""
+		userACK := ""
+		if err := u.slackRepo.InsertMessage(ctx, triggerID, workspace, userACK, ts, data.GetIncidentID()); err != nil {
+			log.Errorf("Error store message to database: %s", err)
+		}
+	} else {
+		var recoverTime time.Time
+		if data.GetState() == "closed" || data.GetState() == "acknowledged" {
+			recoverTime = time.Now().Local()
+		} else {
+			recoverTime = time.Time{}
+		}
 
-	return incident, err
-}
+		// Store Incident information
+		if err := u.slackRepo.UpdateNewRelicIncidentStatusByID(ctx, data.GetState(), incidentTs, data.GetChannel(), data.GetIncidentID(), recoverTime); err != nil {
+			log.Errorf("Error store message to database: %s", err)
+		}
 
-func (sr *SlackRepo) GetMessageByTimestamp(ctx context.Context, messageTimestamp, channel string) (entitySlack.Slack, error) {
-	slackMessage := entitySlack.Slack{}
-	err := sr.db.GetContext(ctx, &slackMessage, sr.getQuery[getMessageByTimestamp], messageTimestamp, channel)
+		// Get NewRelic Incident BY incident ID
+		i, err := u.slackRepo.GetNewRelicIncidentByID(ctx, data.GetIncidentID(), data.GetChannel())
+		if err != nil {
+			log.Errorf("Error GET incident on database: %s", err)
+		}
 
-	return slackMessage, err
-}
-
-func (sr *SlackRepo) GetMessageByIncidentID(ctx context.Context, incidentID int, channel string) (entitySlack.Slack, error) {
-	slackMessage := entitySlack.Slack{}
-	err := sr.db.GetContext(ctx, &slackMessage, sr.getQuery[getMessageByIncidentID], incidentID, channel)
-
-	return slackMessage, err
-}
-
-// InsertMessage stores Slack message/alert for future reference.
-// We need to track alerts/messages that were sent, e.g. to reply updates in its thread or to update the message body.
-func (sr *SlackRepo) InsertMessage(ctx context.Context, triggerID, workspace, userACK, messageTimestamp string, incidentID int) error {
-	_, err := sr.db.ExecContext(ctx, sr.insertQuery[insertMessage], triggerID, workspace, userACK, messageTimestamp, incidentID)
-	if err != nil {
-		log.Errorf("Error insert slack message: %s", err)
-		return err
-	}
-	return nil
-}
-
-func (sr *SlackRepo) InsertNewRelicIncident(ctx context.Context, ID, conditionID int, name, url, description, owner, generatedBy, status, severity, rootCause, channel, labels string, startTime, recoverTime time.Time) error {
-	_, err := sr.db.ExecContext(ctx, sr.insertQuery[insertNewRelicIncident], ID, name, url, description, owner, generatedBy, status, severity, conditionID, labels, rootCause, channel, startTime, recoverTime)
-	if err != nil {
-		log.Errorf("Error insert incident root cause: %s", err)
-		return err
-	}
-
-	return nil
-}
-
-func (sr *SlackRepo) UpdateMessageByTimestamp(ctx context.Context, triggerID, workspace, userACK, messageTimestamp, channel string) error {
-	_, err := sr.db.ExecContext(ctx, sr.insertQuery[updateMessageByTimestamp], triggerID, workspace, userACK, messageTimestamp, channel)
-	if err != nil {
-		log.Errorf("Error update slack message by timestamp: %s", err)
-		return err
-	}
-	return nil
-}
-
-func (sr *SlackRepo) UpdateNewRelicIncidentByID(ctx context.Context, rootCause string, incidentID int) error {
-	_, err := sr.db.ExecContext(ctx, sr.insertQuery[updateNewRelicIncidentByID], rootCause, incidentID)
-	if err != nil {
-		log.Errorf("Error update incident status: %s", err)
-		return err
-	}
-	return nil
-}
-
-func (sr *SlackRepo) UpdateNewRelicIncidentStatusByID(ctx context.Context, status, messageTimestamp, channelID string, incidentID int, recoverTime time.Time) error {
-	_, err := sr.db.ExecContext(ctx, sr.insertQuery[updateNewRelicIncidentStatusByID], status, recoverTime, incidentID, channelID, messageTimestamp)
-	if err != nil {
-		log.Errorf("Error update incident: %s", err)
-		return err
-	}
-	return nil
-}
-
-func (sr *SlackRepo) ReplyMessageInThread(ctx context.Context, channelID, text, color, ts, url string) (string, string, error) {
-	var msgBlocks []slack.Block
-	title := ""
-	body := text
-	temp := strings.Split(text, "\n")
-
-	// this will separate title with body message
-	if len(temp) > 0 {
-		title = temp[0]
-		body = strings.Join(temp[1:], "\n")
-	}
-
-	// Append FieldBlock
-	textBlockObj := slack.NewTextBlockObject("mrkdwn", body, false, false)
-	msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-
-	msg := slack.NewBlockMessage(msgBlocks...)
-	b, err := json.Marshal(&msg)
-	if err != nil {
-		log.Errorf(err.Error())
-		return "", "", err
-	}
-
-	m := slack.Message{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return "", "", err
-	}
-
-	attach := slack.Attachment{
-		Color:     "FFFFFF",
-		Title:     title,
-		TitleLink: url,
-	}
-
-	block := slack.Attachment{
-		Color: color,
-		Blocks: slack.Blocks{
-			BlockSet: m.Blocks.BlockSet,
-		},
-	}
-
-	// Post Parameters
-	param := slack.PostMessageParameters{
-		ThreadTimestamp: ts,
-	}
-
-	attachment := slack.MsgOptionAttachments(attach, block)
-	postParams := slack.MsgOptionPostMessageParameters(param)
-
-	// channel, ts, _, err := sr.slack.SendMessage(channelID, attachment)
-	channel, ts, err := sr.slack.PostMessage(channelID, attachment, postParams)
-	if err != nil {
-		return "", "", err
-	}
-
-	return channel, ts, err
-}
-
-func (sr *SlackRepo) SendMessage(ctx context.Context, channelID, text, color, ts, vendor, url string) (string, string, error) {
-	var (
-		msgBlocks []slack.Block
-	)
-	title := ""
-	body := text
-	temp := strings.Split(text, "\n")
-
-	// this will separate title with body message
-	if len(temp) > 0 {
-		title = temp[0]
-		body = strings.Join(temp[1:], "\n")
-	}
-
-	// TitleBlock
-	// titleBlockObj := slack.NewTextBlockObject("mrkdwn", title, false, false)
-	// titleBlocks = append(titleBlocks, slack.NewHeaderBlock(titleBlockObj))
-
-	// Append FieldBlock
-	textBlockObj := slack.NewTextBlockObject("mrkdwn", body, false, false)
-	// msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-
-	// Append ActionBlock
-	ackBtnTxt := slack.NewTextBlockObject("plain_text", "Acknowledge", false, false)
-	ackBtn := slack.NewButtonBlockElement("reason_btn", "", ackBtnTxt)
-	ignoreBtnTxt := slack.NewTextBlockObject("plain_text", "Ignore", false, false)
-	ignoreBtn := slack.NewButtonBlockElement("ignore_btn", "ignored", ignoreBtnTxt)
-	// msgBlocks = append(msgBlocks, slack.NewActionBlock("", ackBtn, ignoreBtn))
-
-	switch vendor {
-	case "New Relic":
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-		msgBlocks = append(msgBlocks, slack.NewActionBlock("", ackBtn, ignoreBtn))
-	case "Google Cloud Platform":
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-	default:
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-	}
-
-	msg := slack.NewBlockMessage(msgBlocks...)
-
-	// Message Block
-	b, err := json.Marshal(&msg)
-	if err != nil {
-		log.Errorf(err.Error())
-		return "", "", err
-	}
-
-	m := slack.Message{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return "", "", err
-	}
-
-	// Attachment Parameters
-	attach := slack.Attachment{
-		Color:     "FFFFFF",
-		Title:     title,
-		TitleLink: url,
-	}
-
-	block := slack.Attachment{
-		Color: color,
-		Blocks: slack.Blocks{
-			BlockSet: m.Blocks.BlockSet,
-		},
-	}
-
-	// Post Parameters
-	param := slack.PostMessageParameters{
-		ThreadTimestamp: ts,
-	}
-
-	attachment := slack.MsgOptionAttachments(attach, block)
-	postParams := slack.MsgOptionPostMessageParameters(param)
-
-	channel, ts, err := sr.slack.PostMessage(channelID, attachment, postParams)
-	if err != nil {
-		return "", "", err
-	}
-
-	return channel, ts, err
-}
-
-func (sr *SlackRepo) UpdateMessage(ctx context.Context, channelID, text, color, ts, vendor, url string) (string, string, error) {
-	var msgBlocks []slack.Block
-	title := ""
-	body := text
-	temp := strings.Split(text, "\n")
-
-	// this will separate title with body message
-	if len(temp) > 0 {
-		title = temp[0]
-		body = strings.Join(temp[1:], "\n")
-	}
-
-	// Append FieldBlock
-	textBlockObj := slack.NewTextBlockObject("mrkdwn", body, false, false)
-	// msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-
-	// Append ActionBlock
-	ackBtnTxt := slack.NewTextBlockObject("plain_text", "Acknowledge", false, false)
-	ackBtn := slack.NewButtonBlockElement("reason_btn", "", ackBtnTxt)
-	ignoreBtnTxt := slack.NewTextBlockObject("plain_text", "Ignore", false, false)
-	ignoreBtn := slack.NewButtonBlockElement("ignore_btn", "ignored", ignoreBtnTxt)
-	// msgBlocks = append(msgBlocks, slack.NewActionBlock("", ackBtn, ignoreBtn))
-
-	switch vendor {
-	case "New Relic":
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-		msgBlocks = append(msgBlocks, slack.NewActionBlock("", ackBtn, ignoreBtn))
-	case "Google Cloud Platform":
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-	default:
-		msgBlocks = append(msgBlocks, slack.NewSectionBlock(textBlockObj, nil, nil))
-	}
-
-	msg := slack.NewBlockMessage(msgBlocks...)
-	b, err := json.Marshal(&msg)
-	if err != nil {
-		log.Errorf(err.Error())
-		return "", "", err
-	}
-
-	m := slack.Message{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return "", "", err
-	}
-
-	// Attachment Parameters
-	attach := slack.Attachment{
-		Color:     "FFFFFF",
-		Title:     title,
-		TitleLink: url,
-	}
-
-	block := slack.Attachment{
-		Color: color,
-		Blocks: slack.Blocks{
-			BlockSet: m.Blocks.BlockSet,
-		},
-	}
-
-	// block := slack.MsgOptionBlocks(m.Blocks.BlockSet...)
-	attachment := slack.MsgOptionAttachments(attach, block)
-
-	channel, ts, _, err := sr.slack.UpdateMessage(channelID, ts, attachment)
-	if err != nil {
-		return "", "", err
-	}
-
-	return channel, ts, err
-}
-
-func (sr *SlackRepo) SubmitButtonAction(blockActions []*slack.BlockAction, options []string, channelID, tsMessage, triggerID, incidentTitle, incidentMessage, incidentColor, username, url string, replaceMessage bool) (string, error) {
-	var actionValue string
-	for _, actions := range blockActions {
-		switch actions.ActionID {
-		case "reason_btn":
-			modalRequest := sr.GenerateModalRequest(options)
-			modalRequest.CallbackID = "orderModalSubmission"
-			_, err := sr.slack.OpenView(triggerID, modalRequest)
-			if err != nil {
-				log.Errorf("Error opening view : %s", err)
-			}
-		case "ignore_btn":
-			actionValue = actions.Value
-			_, err := sr.ReplaceMessage(channelID, tsMessage, actionValue, incidentTitle, incidentMessage, incidentColor, username, url, replaceMessage)
-			if err != nil {
-				log.Errorf("Error replaced message : %s", err)
-				return "", err
-			}
-		default:
-			log.Info("Invalid action : %s", actions.ActionID)
-			return "", nil
+		// Update Slack Message
+		_, _, err = u.slackRepo.UpdateMessage(ctx, data.GetChannel(), u.GetMessageSummary(data, i.StartTime, i.RecoverTime), u.GetColor(data), incidentTs, data.GetVendor(), data.GetURL())
+		if err != nil {
+			log.Errorf("Failed send slack message to channel %s because: %s", data.GetChannel(), err)
 		}
 	}
 
-	return actionValue, nil
-}
-
-func (sr *SlackRepo) ReplaceMessage(channelID, tsMessage, actionValue, incidentTitle, incidentMessage, incidentColor, username, url string, replaceMessage bool) (string, error) {
-	var msgBlocks []slack.Block
-	newMessage := fmt.Sprintf("\n*Action :* \nThe user `%s` has *acknowledged* with `%s`", username, actionValue)
-
-	// Append FieldBlock
-	textOriginalBlockObj := slack.NewTextBlockObject("mrkdwn", incidentMessage, false, false)
-	textNewBlockObj := slack.NewTextBlockObject("mrkdwn", newMessage, false, false)
-	msgBlocks = append(msgBlocks, slack.NewSectionBlock(textOriginalBlockObj, nil, nil))
-	msgBlocks = append(msgBlocks, slack.NewSectionBlock(textNewBlockObj, nil, nil))
-
-	respMessage := slack.NewBlockMessage(msgBlocks...)
-	respMessage.ReplaceOriginal = replaceMessage
-
-	b, err := json.Marshal(&respMessage)
+	// Get NewRelic Incident BY incident ID
+	incidentMetadata, err := u.slackRepo.GetNewRelicIncident(ctx, data.GetIncidentID(), data.GetChannel())
 	if err != nil {
-		log.Errorf(err.Error())
-		return "", err
+		log.Errorf("Error GET incident on database: %s", err)
 	}
 
-	m := slack.Message{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return "", err
-	}
-
-	// Attachment Parameters
-	attach := slack.Attachment{
-		Color:     "FFFFFF",
-		Title:     incidentTitle,
-		TitleLink: url,
-	}
-
-	block := slack.Attachment{
-		Color: incidentColor,
-		Blocks: slack.Blocks{
-			BlockSet: m.Blocks.BlockSet,
-		},
-	}
-
-	attachment := slack.MsgOptionAttachments(attach, block)
-
-	message, _, _, err := sr.slack.UpdateMessage(channelID, tsMessage, attachment)
+	// Send Slack Message
+	_, _, err = u.slackRepo.ReplyMessageInThread(ctx, data.GetChannel(), u.GetMessage(data), u.GetColor(data), incidentMetadata.MessageTimestamp, data.GetURL())
 	if err != nil {
-		log.Errorf("Error update message: %s", err)
-		return "", err
+		log.Errorf("Failed send slack message to channel %s because: %s", data.GetChannel(), err)
 	}
 
-	return message, err
+	return incidentMetadata, nil
 }
 
-func (sr *SlackRepo) GenerateModalRequest(options []string) slack.ModalViewRequest {
-	// Create ModalViewRequest with a header two input
-	titleText := slack.NewTextBlockObject("plain_text", "Cloud Platform Diary", false, false)
-	closeText := slack.NewTextBlockObject("plain_text", "Close", false, false)
-	submitText := slack.NewTextBlockObject("plain_text", "Submit", false, false)
+func (u *UseCase) RegisterIncident(ctx context.Context, data entitySlack.NewRelicReplyThread) error {
+	dt := time.Now()
 
-	headerText := slack.NewTextBlockObject("mrkdwn", "Please select the cause of the warning", false, false)
-	headerSectionBlock := slack.NewSectionBlock(headerText, nil, nil)
+	incidentID := data.GetIncidentID()
+	incidentName := data.GetIncidentName()
+	incidentURL := data.GetURL()
+	incidentDescription := data.GetBody()
+	incidentOwner := data.GetOwner()
+	incidentGeneratedBy := data.GetVendor()
+	incidentStatus := data.GetState()
+	incidentSeverity := data.GetSeverity()
+	incidentConditionID := data.GetConditionID()
+	incidentLabels := data.GetLabels()
+	incidentRootCause := "null"
+	incidentChannel := data.GetChannel()
+	incidentStartTime := dt.Local()
+	incidentRecoverTime := time.Time{}
 
-	causeOptions := sr.CreateOptionBlockObject(options)
-	causeOptionText := slack.NewTextBlockObject(slack.PlainTextType, "Reason", false, false)
-	causeOptionElement := slack.NewOptionsSelectBlockElement(slack.OptTypeStatic, nil, "reason_option", causeOptions...)
-	causeOptionBlock := slack.NewInputBlock("reason_option", causeOptionText, causeOptionElement)
-
-	causeText := slack.NewTextBlockObject("plain_text", "Other Reason", false, false)
-	causePlaceholder := slack.NewTextBlockObject("plain_text", "Only fill this if you select others in Reason", false, false)
-	causeElement := slack.NewPlainTextInputBlockElement(causePlaceholder, "reason_other")
-	causeBlock := slack.NewInputBlock("reason_other", causeText, causeElement)
-	causeBlock.Optional = true
-
-	blocks := slack.Blocks{
-		BlockSet: []slack.Block{
-			headerSectionBlock,
-			causeOptionBlock,
-			causeBlock,
-		},
+	if err := u.slackRepo.InsertNewRelicIncident(
+		ctx,
+		incidentID,
+		incidentConditionID,
+		incidentName,
+		incidentURL,
+		incidentDescription,
+		incidentOwner,
+		incidentGeneratedBy,
+		incidentStatus,
+		incidentSeverity,
+		incidentRootCause,
+		incidentChannel,
+		incidentLabels,
+		incidentStartTime,
+		incidentRecoverTime,
+	); err != nil {
+		log.Errorf("Error store incident to database: %s", err)
+		return err
 	}
 
-	var modalRequest slack.ModalViewRequest
-	modalRequest.Type = slack.ViewType("modal")
-	modalRequest.Title = titleText
-	modalRequest.Close = closeText
-	modalRequest.Submit = submitText
-	modalRequest.Blocks = blocks
-
-	return modalRequest
+	return nil
 }
 
-func (sr *SlackRepo) CreateOptionBlockObject(options []string) []*slack.OptionBlockObject {
-	optionBlockObjects := make([]*slack.OptionBlockObject, 0, len(options))
+// AckMessage provides an ack form.
+// Ack form comes up whenever user does an ack on a Slack Message (e.g. clicked Ack button to open an Ack form)
+func (u *UseCase) AckMessage(ctx context.Context, message slack.InteractionCallback) (entitySlack.Incident, string, string, error) {
+	replaceOriginalMessage := true
+	tsMessage := message.Message.Timestamp
+	channelID := message.Container.ChannelID
+	triggerID := message.TriggerID
+	username := message.User.Name
+	workspace := message.Team.Domain
 
-	for _, opt := range options {
-		optionText := slack.NewTextBlockObject(slack.PlainTextType, opt, false, false)
-		optionBlockObjects = append(optionBlockObjects, slack.NewOptionBlockObject(opt, optionText, nil))
+	// Record Slack Message related metadata.
+	if err := u.slackRepo.UpdateMessageByTimestamp(ctx, triggerID, workspace, username, tsMessage, channelID); err != nil {
+		log.Errorf("Error store message to database: %s", err)
 	}
 
-	otherOptionText := slack.NewTextBlockObject(slack.PlainTextType, "others (provide the reason in the next field)", false, false)
-	optionBlockObjects = append(optionBlockObjects, slack.NewOptionBlockObject("others", otherOptionText, nil))
+	// Retrieve the original Slack Message that's currently being Ack'ed
+	slackMessage, err := u.slackRepo.GetMessageByTimestamp(ctx, tsMessage, channelID)
+	if err != nil {
+		log.Errorf("Error GET message on database: %s", err)
+	}
 
-	return optionBlockObjects
+	// Get incident ID and condition alert ID
+	incident, err := u.slackRepo.GetNewRelicIncidentByMsgTimestamp(ctx, slackMessage.IncidentID, slackMessage.MessageTimestamp)
+	if err != nil {
+		log.Errorf("Error GET incident on database: %s", err)
+	}
+
+	// Construct Ack form
+	blockActions := message.ActionCallback.BlockActions
+	optionsData := u.GetOptionStr(incident.ConditionID)
+	incidentTitle := u.GetTitle(incident.GeneratedBy, incident.Status, incident.Name, incident.URL)
+	incidentColor := u.GetColorStr(incident.Status)
+	incidentMessage := u.GetMessageString(incident.Description, incident.Status, incident.StartTime, incident.RecoverTime)
+
+	// Respond with Ack form
+	result, err := u.slackRepo.SubmitButtonAction(blockActions, optionsData, channelID, tsMessage, triggerID, incidentTitle, incidentMessage, incidentColor, username, incident.URL, replaceOriginalMessage)
+	if err != nil {
+		log.Errorf("Failed update slack block message because: %s", err)
+	}
+
+	return incident, result, slackMessage.MessageTimestamp, nil
 }
 
-this is code for create a notfication from newrelic to a slack channel i want to change this code to create notifications to spesific email
+// SubmitAckForm accepts Ack form submission and processes it (e.g. updates the Slack Message with new information).
+func (u *UseCase) SubmitAckForm(ctx context.Context, message slack.InteractionCallback, messageTimestamp, channel string) (entitySlack.Incident, string, error) {
+	var actionValue string
+	replaceOriginalMessage := true
+	username := message.User.Name
+	viewState := message.View.State.Values
+
+	for _, state := range viewState {
+		for _, value := range state {
+			selectedOptions := value.SelectedOption.Value
+			textValue := value.Value
+			if len(textValue) > 0 {
+				actionValue = textValue
+			}
+
+			if len(selectedOptions) > 0 {
+				actionValue = selectedOptions
+			}
+		}
+	}
+
+	// Retrieve Slack Message
+	slackMessage, err := u.slackRepo.GetMessageByTimestamp(ctx, messageTimestamp, channel)
+	if err != nil {
+		log.Errorf("Error GET message on database: %s", err)
+	}
+
+	// Store Incident information from Ack form
+	if err := u.slackRepo.UpdateNewRelicIncidentByID(ctx, actionValue, slackMessage.IncidentID); err != nil {
+		log.Errorf("Error store message to database: %s", err)
+	}
+
+	// Retrieve Incident information.
+	incident, err := u.slackRepo.GetNewRelicIncidentByMsgTimestamp(ctx, slackMessage.IncidentID, slackMessage.MessageTimestamp)
+	if err != nil {
+		log.Errorf("Error GET incident on database: %s", err)
+	}
+
+	// Update Slack Message to reflect new information from Ack form.
+	incidentTitle := u.GetTitle(incident.GeneratedBy, incident.Status, incident.Name, incident.URL)
+	incidentColor := u.GetColorStr(incident.Status)
+	incidentMessage := u.GetMessageString(incident.Description, incident.Status, incident.StartTime, incident.RecoverTime)
+	_, err = u.slackRepo.ReplaceMessage(incident.Channel, slackMessage.MessageTimestamp, actionValue, incidentTitle, incidentMessage, incidentColor, username, incident.URL, replaceOriginalMessage)
+	if err != nil {
+		log.Errorf("Failed update slack block message because: %s", err)
+	}
+
+	return incident, actionValue, nil
+}
+
+func (u *UseCase) GetOptionStr(data int) []string {
+	optionData := []string{}
+
+	for _, v := range webhook.DiaryWebhookConfig.Slack.NewRelic {
+		if data == v.AlertConditionID {
+			for _, cause := range v.AlertConditionCause {
+				entry := cause
+				optionData = append(optionData, u.GetDataOptions(entry))
+			}
+		}
+	}
+
+	return optionData
+}
+
+func (u *UseCase) GetLabels(data, key string) string {
+	labels := map[string]string{}
+	json.Unmarshal([]byte(data), &labels)
+
+	value := labels[key]
+	return value
+}
+
+func (u *UseCase) GetTitle(generatedBy, status, name, url string) string {
+	title := fmt.Sprintf("[%s:newrelic:] %s", generatedBy, name)
+
+	messageTitle := fmt.Sprintf("%s\n", title)
+	return messageTitle
+}
+
+func (u *UseCase) GetMessageString(body, status string, startTime, recoverTime time.Time) string {
+	start := startTime.Local().Unix() - 7*3600
+	recover := recoverTime.Local().Unix() - 7*3600
+
+	ttr := ""
+	if status == "closed" && !startTime.IsZero() {
+		duration := time.Now().Local().Sub(time.Unix(start, 0)).Seconds()
+		hour := int(duration / 3600)
+		left := int(duration) % 3600
+		minute := int(left / 60)
+		second := int(left % 60)
+
+		str := ""
+		if hour > 0 {
+			str += fmt.Sprintf("%dh ", hour)
+		}
+		if minute > 0 {
+			str += fmt.Sprintf("%dm ", minute)
+		}
+		if second > 0 {
+			str += fmt.Sprintf("%ds ", second)
+		}
+
+		ttr = fmt.Sprintf("\n*Time to Resolve* : *%s* (*%s*)", str, time.Unix(recover, 0).Format(time.RFC1123))
+	}
+
+	message := fmt.Sprintf("*Current Status* : *`%s`*\n*Incident Time* : %s\n%s\n\n*Incident* : \n%s\n\n ", status, time.Unix(start, 0).Format(time.RFC1123), ttr, body)
+
+	return message
+}
+
+func (u *UseCase) GetMessage(data entitySlack.NewRelicReplyThread) string {
+	body := data.GetBody()
+	message := fmt.Sprintf("%s\n*Status : *`%s`\n*Incident : *\n%s", data.GetTitle(), data.GetState(), body)
+
+	return message
+}
+
+func (u *UseCase) GetMessageSummary(data entitySlack.NewRelicReplyThread, start, recover time.Time) string {
+	// url := data.GetURL()
+	title := data.GetTitle()
+	body := data.GetBody()
+
+	status := data.GetState()
+
+	startTime := start.Local().Unix() - 7*3600
+	recoverTime := recover.Local().Unix() - 7*3600
+
+	ttr := ""
+	if status == "closed" || status == "acknowledged" && !time.Unix(startTime, 0).IsZero() {
+		duration := time.Now().Local().Sub(time.Unix(startTime, 0)).Seconds()
+		hour := int(duration / 3600)
+		left := int(duration) % 3600
+		minute := int(left / 60)
+		second := int(left % 60)
+
+		str := ""
+		if hour > 0 {
+			str += fmt.Sprintf("%dh ", hour)
+		}
+		if minute > 0 {
+			str += fmt.Sprintf("%dm ", minute)
+		}
+		if second > 0 {
+			str += fmt.Sprintf("%ds ", second)
+		}
+
+		ttr = fmt.Sprintf("\n*Time to Resolve* : *%s* (*%s*)", str, time.Unix(recoverTime, 0).Format(time.RFC1123))
+	}
+
+	message := fmt.Sprintf("%s\n*Current Status* : *`%s`*\n*Incident Time* : %s\n%s\n\n*Incident* : \n%s\n\n ", title, status, time.Unix(startTime, 0).Format(time.RFC1123), ttr, body)
+
+	return message
+}
+
+func (u *UseCase) GetColor(data entitySlack.NewRelicReplyThread) string {
+	color := "FFFFFF"
+	if data.GetState() == "open" {
+		color = "FF0000"
+	} else {
+		color = "00BF85"
+	}
+
+	return color
+}
+
+func (u *UseCase) GetColorStr(status string) string {
+	color := "FFFFFF"
+	if status == "open" {
+		color = "FF0000"
+	} else {
+		color = "00BF85"
+	}
+
+	return color
+}
+
+func (u *UseCase) GetIncidentName(data entitySlack.NewRelicReplyThread) string {
+	var incidentName string
+	for _, v := range webhook.DiaryWebhookConfig.Slack.NewRelic {
+		if data.GetConditionID() == v.AlertConditionID {
+			incidentName = v.AlertConditionName
+		}
+	}
+	return incidentName
+}
+
+func (u *UseCase) GetDataOptions(data string) string {
+	s := data
+	text := strings.Replace(s, "-", " ", -1)
+
+	return text
+}
+
+func (u *UseCase) ConvertValues(data string) string {
+	s := data
+	lower := strings.ToLower(s)
+	text := strings.Replace(lower, " ", "-", -1)
+
+	return text
+}
