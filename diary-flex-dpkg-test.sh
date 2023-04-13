@@ -87,9 +87,10 @@ collect_os_dpkg() {
         dpkg_output="$(dpkg -l | tail -n +6)"
         hostname="$(hostname)"
         # Use awk to parse the output of dpkg -l and select the columns you want to include in the JSON output
-        awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" |
+        #awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" |
         # Use jq to convert the awk output to JSON format
-        packages="$(jq -s '{Hostname: "'"$HOSTNAME"'", Packages: .}' -)"
+	packages=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" | jq -s '{Hostname: "'"$hostname"'", Packages: .}')
+        #packages="$(jq -s '{Hostname: "'"$HOSTNAME"'", Packages: .}' -)"
         OS_LSB_RELEASE_STR="$(fetch_module $OS_LSB_RELEASE_COLLECTOR)"
         OS_LSB_RELEASE_DATA=( $OS_LSB_RELEASE_STR )
         diary_report \
