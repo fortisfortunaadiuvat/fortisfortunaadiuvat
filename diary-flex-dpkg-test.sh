@@ -86,7 +86,7 @@ collect_os_lsb_release() {
 collect_os_dpkg() {
         dpkg_output="$(dpkg -l | tail -n +6)"
         hostname="$(hostname)"
-	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" | jq -s '{Hostname: "'"$hostname"'", Packages: .}' -c)
+	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c)
         OS_DPKG_DATA=( $OS_DPKG_STR )
         diary_report \
                 "diaryEventStatus=$?" \
