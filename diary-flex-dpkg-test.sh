@@ -109,6 +109,8 @@ main() {
 
 	#Collect os version from lsb_release
 	collect_os_lsb_release
+	
+	collect_os_dpkg
 }
 
 main "$@"
