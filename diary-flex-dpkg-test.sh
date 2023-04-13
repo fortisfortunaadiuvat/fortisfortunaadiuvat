@@ -93,7 +93,7 @@ collect_os_dpkg() {
                 "diaryEventType=diary_flex" \
                 "diaryEventSourceType=diary_flex_os_dpkg" \
                 "diaryEventActor=diary-flex-1d-collector.sh" \
-                "listdpkg=[{"Package":"td-agent-bit","Version":"1.8.12","Architecture":"amd64","Description":"Fast"}]"
+                "$OS_DPKG_STR"
 }
 
 main() {
