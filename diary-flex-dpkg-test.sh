@@ -91,8 +91,8 @@ collect_os_dpkg() {
         # Use jq to convert the awk output to JSON format
 	packages=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\",\"Description\":\""$5"\"}"}' <<< "$dpkg_output" | jq -s '{Hostname: "'"$hostname"'", Packages: .}')
         #packages="$(jq -s '{Hostname: "'"$HOSTNAME"'", Packages: .}' -)"
-        OS_LSB_RELEASE_STR="$(fetch_module $OS_LSB_RELEASE_COLLECTOR)"
-        OS_LSB_RELEASE_DATA=( $OS_LSB_RELEASE_STR )
+        #OS_LSB_RELEASE_STR="$(fetch_module $OS_LSB_RELEASE_COLLECTOR)"
+        #OS_LSB_RELEASE_DATA=( $OS_LSB_RELEASE_STR )
         diary_report \
                 "diaryEventStatus=$?" \
                 "diaryEventType=diary_flex" \
