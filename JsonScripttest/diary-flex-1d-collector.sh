@@ -56,6 +56,18 @@ collect_os_uname() {
 		"operatingSystem=${OS_UNAME_DATA[14]}"
 }
 
+collect_os_dpkg() {
+        dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
+        hostname="$(hostname)"
+	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c)
+        OS_DPKG_DATA=( $OS_DPKG_STR )
+        diary_report \
+                "diaryEventStatus=$?" \
+                "diaryEventType=diary_flex" \
+                "diaryEventSourceType=diary_flex_os_dpkg" \
+                "diaryEventActor=diary-flex-1d-collector.sh" \
+                "$OS_DPKG_STR"
+}
 
 main() {
 	#Collect uname
