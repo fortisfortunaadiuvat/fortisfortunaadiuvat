@@ -61,7 +61,7 @@ collect_os_dpkg() {
         # Remove trailing comma from the last line
         OS_DPKG_STR=$(echo "${OS_DPKG_STR}" | sed 's/,\s$/ /')
         # Enclose the OS_DPKG_STR in curly braces to create a JSON object
-        OS_DPKG_DATA="{${OS_DPKG_STR}}"
+        OS_DPKG_DATA=$(echo "${OS_DPKG_DATA}" | grep -E '^{"[^"]*":"A')
         # dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
         # hostname="$(hostname)"
 	# OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
