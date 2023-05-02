@@ -46,7 +46,7 @@ sync_diary() {
     source "$SDK_PATH/$SDK_FILENAME"
 
     ## send event to cloud-platform-diary
-    debug_event_params $EVENT_DIARY_PARAMS >/dev/null 2>&1
+    debug_event_params 
 }
 
 sync_diary "$@"
