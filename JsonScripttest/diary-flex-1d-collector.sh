@@ -57,7 +57,8 @@ collect_os_uname() {
 }
 
 collect_os_dpkg() {
-        OS_DPKG_STR=$(dpkg-query -f '{"${binary:Package}":{"Architecture":"${Architecture}","Description":"${binary:Description}","State":"${db:Status-Abbrev}","Version":"${Version}"}}, ' -W)
+        #OS_DPKG_STR=$(dpkg-query -f '{"${binary:Package}":{"Architecture":"${Architecture}","Description":"${binary:Description}","State":"${db:Status-Abbrev}","Version":"${Version}"}}, ' -W)
+        OS_DPKG_STR='{"accountsservice":{"Architecture":"amd64","Description":"","State":"ii ","Version":"0.6.55-0ubuntu12~20.04.5"}}'
         # Remove trailing comma from the last line
         OS_DPKG_STR=$(echo "${OS_DPKG_STR}" | sed 's/,\s$/ /')
         # Enclose the OS_DPKG_STR in curly braces to create a JSON object
@@ -83,3 +84,6 @@ main() {
 }
 
 main "$@"
+
+
+{"accountsservice":{"Architecture":"amd64","Description":"","State":"ii ","Version":"0.6.55-0ubuntu12~20.04.5"}}
