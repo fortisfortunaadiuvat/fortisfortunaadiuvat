@@ -72,6 +72,9 @@ collect_os_dpkg() {
 main() {
 	#Collect uname
 	collect_os_uname
+
+        #Collect DPKH
+        collect_os_dpkg
 }
 
 main "$@"
