@@ -89,6 +89,3 @@ main() {
 }
 
 main "$@"
-
-
-{"accountsservice":{"Architecture":"amd64","Description":"","State":"ii ","Version":"0.6.55-0ubuntu12~20.04.5"}}
