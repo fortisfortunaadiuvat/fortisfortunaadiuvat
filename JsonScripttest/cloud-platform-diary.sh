@@ -9,15 +9,15 @@ sync_diary() {
     # parameter variable
     JSON_DATA=($@)
     JSON_DATA_SOURCE="${JSON_DATA[@]:-'null=null'}"
-    JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
+ #   JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
 
- #   if [[ "$JSON_DATA_SOURCE" == *"="* ]]; then
- #       # format 1: space-separated key-value pairs
- #       JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
- #   else
- #       # format 2: JSON object
- #       JSON_CUSTOM_DATA=$(jq -c '.' <<< "$JSON_DATA_SOURCE")
- #   fi
+    if [[ "$JSON_DATA_SOURCE" == *"="* ]]; then
+        # format 1: space-separated key-value pairs
+        JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
+    else
+        # format 2: JSON object
+        JSON_CUSTOM_DATA=$(jq -c '.' <<< "$JSON_DATA_SOURCE")
+    fi
 
     DIARY_EVENT_TIME_DURATION=$(jq -r '.diaryEventTimeDuration // "0" | tonumber' <<< "$JSON_CUSTOM_DATA")
     DIARY_EVENT_STATUS=$(jq -r '.diaryEventStatus' <<< "$JSON_CUSTOM_DATA")
