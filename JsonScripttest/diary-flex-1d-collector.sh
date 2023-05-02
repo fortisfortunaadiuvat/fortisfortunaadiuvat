@@ -11,7 +11,7 @@ OS_UNAME_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloud
 diary_report() {
     MODULE_FILENAME="cloud-platform-diary.sh"
     MODULE_PATH="/tmp/.diary"
-    MODULE_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/718c55ca0d5a27738672c25633e5c40b267519d2/JsonScripttest/$MODULE_FILENAME"
+    MODULE_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/main/JsonScripttest/$MODULE_FILENAME"
     MODULE_PARAMS=$(echo "$@")
 
     if [ $(( ( $(date +%s) - $(stat -L --format %Y $MODULE_PATH/$MODULE_FILENAME 2>/dev/null || printf '0') ) > 60 )) -eq 1 ]; then

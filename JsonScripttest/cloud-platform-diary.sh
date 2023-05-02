@@ -29,7 +29,7 @@ sync_diary() {
     JSON_DIARY_TIME_DURATION=$(echo "$JSON_RESULT_DATA" | jq -r '.diaryEventTimeDuration')
     SDK_FILENAME="diary.sh"
     SDK_PATH="/tmp/.diary"
-    SDK_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/718c55ca0d5a27738672c25633e5c40b267519d2/JsonScripttest/$SDK_FILENAME"
+    SDK_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/main/JsonScripttest/$SDK_FILENAME"
 
     # set new args for send event to cloud-platform-diary
     set -- $JSON_DIARY_TYPE $JSON_DIARY_SOURCE_TYPE $JSON_DIARY_ACTOR $JSON_DIARY_STATUS $JSON_DIARY_OPERATION_COMPANY $JSON_DIARY_MESH $JSON_DIARY_CUSTOM_DATA $JSON_DIARY_TIME_DURATION
