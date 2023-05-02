@@ -84,8 +84,12 @@ main() {
 	#Collect uname
 	collect_os_uname
 
+        
+
         #Collect DPKH
         collect_os_dpkg
+
+        debug_event_params
 }
 
 main "$@"
