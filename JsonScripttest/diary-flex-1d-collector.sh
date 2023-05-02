@@ -59,7 +59,7 @@ collect_os_uname() {
 collect_os_dpkg() {
         dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
         hostname="$(hostname)"
-	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '.' -c )
+	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
         OS_DPKG_DATA=( $OS_DPKG_STR )
         diary_report \
                 "diaryEventStatus=$?" \
