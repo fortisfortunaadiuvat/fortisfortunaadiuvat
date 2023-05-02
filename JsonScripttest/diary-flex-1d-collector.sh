@@ -72,9 +72,14 @@ collect_os_dpkg() {
                 "diaryEventType=diary_flex" \
                 "diaryEventSourceType=diary_flex_os_dpkg" \
                 "diaryEventActor=diary-flex-1d-collector.sh" \
-                '$OS_DPKG_DATA'
+                "$OS_DPKG_DATA"
 }
 
+debug_event_params() {
+    echo "[$(date)] Debug Event parameter OS_DPKG_DATA"
+
+    echo $OS_DPKG_DATA
+}
 main() {
 	#Collect uname
 	collect_os_uname
