@@ -12,7 +12,7 @@ sync_diary() {
     echo "${JSON_DATA}"
     JSON_DATA_SOURCE="${JSON_DATA[@]:-'null=null'}"
     echo "[$(date)] Debug Event parameter Cloud Platform Diary.sh json data source before parse"
-    echo "${JSON_DATA_SOURCE}"
+    echo "$JSON_DATA_SOURCE"
     #JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
 
     if [[ "$JSON_DATA_SOURCE" == *"="* ]]; then
