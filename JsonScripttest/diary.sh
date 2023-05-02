@@ -81,18 +81,6 @@ EVENT=$( jq -n \
             "diaryEventTimeDuration": $diary_event_time_duration,
         }' )
 
-send_event() {
-    echo "[$(date)] Pushed Event to Cloud Platform Diary"
-
-    curl \
-        --retry 2 \
-        --retry-max-time 5 \
-        --connect-timeout 1 \
-        --request POST $PLATFORM_DIARY_URL/api/diary \
-        --header 'Content-Type: application/json' \
-        --data "$EVENT" &
-}
-
 debug_event_params() {
     echo "[$(date)] Debug Event parameter Cloud Platform Diary"
 

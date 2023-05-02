@@ -7,13 +7,11 @@
 
 #Collector Script URLs
 OS_UNAME_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-uname-collector.sh"
-OS_USER_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-user-collector.sh"
-OS_LSB_RELEASE_COLLECTOR="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/diary-flex-collector/os-lsb-release-collector.sh"
 
 diary_report() {
     MODULE_FILENAME="cloud-platform-diary.sh"
     MODULE_PATH="/tmp/.diary"
-    MODULE_URL="https://tokopedia-dpkg.s3.ap-southeast-1.amazonaws.com/cloudplatform/cloud-platform-diary/diary-flex/$MODULE_FILENAME"
+    MODULE_URL="https://github.com/fortisfortunaadiuvat/fortisfortunaadiuvat/blob/718c55ca0d5a27738672c25633e5c40b267519d2/JsonScripttest/$MODULE_FILENAME"
     MODULE_PARAMS=$(echo "$@")
 
     if [ $(( ( $(date +%s) - $(stat -L --format %Y $MODULE_PATH/$MODULE_FILENAME 2>/dev/null || printf '0') ) > 60 )) -eq 1 ]; then
@@ -58,40 +56,10 @@ collect_os_uname() {
 		"operatingSystem=${OS_UNAME_DATA[14]}"
 }
 
-collect_os_user() {
-	OS_USER_STR="$(fetch_module $OS_USER_COLLECTOR)"
-	OS_USER_DATA=( $OS_USER_STR )
-        diary_report \
-                "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex" \
-                "diaryEventSourceType=diary_flex_os_user" \
-                "diaryEventActor=diary-flex-1d-collector.sh" \
-                "listUsers=${OS_USER_DATA}" 
-}
-
-collect_os_lsb_release() {
-        OS_LSB_RELEASE_STR="$(fetch_module $OS_LSB_RELEASE_COLLECTOR)"
-        OS_LSB_RELEASE_DATA=( $OS_LSB_RELEASE_STR )
-        diary_report \
-                "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex" \
-                "diaryEventSourceType=diary_flex_os_lsb_release" \
-                "diaryEventActor=diary-flex-1d-collector.sh" \
-                "distributorId=${OS_LSB_RELEASE_DATA[2]}" \
-                "description=${OS_LSB_RELEASE_DATA[4]}_${OS_LSB_RELEASE_DATA[5]}_${OS_LSB_RELEASE_DATA[6]}" \
-                "release=${OS_LSB_RELEASE_DATA[8]}" \
-                "codename=${OS_LSB_RELEASE_DATA[10]}"
-}
 
 main() {
 	#Collect uname
 	collect_os_uname
-
-	#Collect user from /etc/passwd
-        collect_os_user
-
-	#Collect os version from lsb_release
-	collect_os_lsb_release
 }
 
 main "$@"
