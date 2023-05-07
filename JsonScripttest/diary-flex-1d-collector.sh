@@ -65,7 +65,7 @@ collect_os_dpkg() {
         #OS_DPKG_DATA=$(echo "${OS_DPKG_STR}")
         dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
         # hostname="$(hostname)"
-	OS_DPKG_JSON=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
+	OS_DPKG_JSON=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '.' -c )
 	OS_DPKG_DATA=( $OS_DPKG_JSON )
 	diary_report \
         "diaryEventStatus=$?" \
