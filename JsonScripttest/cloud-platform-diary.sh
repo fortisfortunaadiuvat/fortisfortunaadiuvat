@@ -13,15 +13,8 @@ sync_diary() {
     JSON_DATA_SOURCE="${JSON_DATA[@]:-'null=null'}"
     echo "[$(date)] Debug Event parameter Cloud Platform Diary.sh json data source before parse"
     echo "$JSON_DATA_SOURCE"
-    #JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
-
-    if [[ "$JSON_DATA_SOURCE" == *"dpkgData="* ]]; then
-    # Parse dpkgData as JSON
-    JSON_CUSTOM_DATA=$(echo "$JSON_DATA_SOURCE" | sed 's/dpkgData=//')
-    else
-    # Use the existing logic to parse the JSON
     JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
-    fi
+
     echo "[$(date)] Debug Event parameter Cloud Platform Diary.sh"
     echo "${JSON_DATA_SOURCE}" 
     DIARY_EVENT_TIME_DURATION=$(jq -r '.diaryEventTimeDuration // "0" | tonumber' <<< "$JSON_CUSTOM_DATA")
@@ -31,7 +24,6 @@ sync_diary() {
     else
         JSON_RESULT_DATA=$(jq --argjson DURATION $DIARY_EVENT_TIME_DURATION '.diaryEventStatus = "failed" | .diaryEventTimeDuration = $DURATION' <<< "$JSON_CUSTOM_DATA")
     fi
-    JSON_CUSTOM_DATA=$(jq -c 'if (.Packages | type) == "string" then .Packages |= fromjson else . end' <<< "$JSON_CUSTOM_DATA")
     JSON_DIARY_CUSTOM_DATA=$(echo "$JSON_RESULT_DATA" | jq -c .)
     JSON_DIARY_TYPE=$(echo "$JSON_RESULT_DATA" | jq -r '.diaryEventType' | sed -r 's/[/.]+/_/g')
     JSON_DIARY_SOURCE_TYPE=$(echo "$JSON_RESULT_DATA" | jq -r '.diaryEventSourceType')
