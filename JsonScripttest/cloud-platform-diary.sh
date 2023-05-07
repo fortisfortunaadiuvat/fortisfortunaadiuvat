@@ -31,7 +31,7 @@ sync_diary() {
     else
         JSON_RESULT_DATA=$(jq --argjson DURATION $DIARY_EVENT_TIME_DURATION '.diaryEventStatus = "failed" | .diaryEventTimeDuration = $DURATION' <<< "$JSON_CUSTOM_DATA")
     fi
-
+    JSON_CUSTOM_DATA=$(jq -c 'if (.Packages | type) == "string" then .Packages |= fromjson else . end' <<< "$JSON_CUSTOM_DATA")
     JSON_DIARY_CUSTOM_DATA=$(echo "$JSON_RESULT_DATA" | jq -c .)
     JSON_DIARY_TYPE=$(echo "$JSON_RESULT_DATA" | jq -r '.diaryEventType' | sed -r 's/[/.]+/_/g')
     JSON_DIARY_SOURCE_TYPE=$(echo "$JSON_RESULT_DATA" | jq -r '.diaryEventSourceType')
