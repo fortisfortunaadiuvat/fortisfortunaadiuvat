@@ -58,15 +58,15 @@ collect_os_uname() {
 
 collect_os_dpkg() {
         #OS_DPKG_STR=$(dpkg-query -f '{"${binary:Package}":{"Architecture":"${Architecture}","Description":"${binary:Description}","State":"${db:Status-Abbrev}","Version":"${Version}"}}, ' -W)
-        OS_DPKG_STR='{"accountsservice":{"Architecture":"amd64","Description":"","State":"ii ","Version":"0.6.55-0ubuntu12~20.04.5"}}'
+        #OS_DPKG_STR='{"accountsservice":{"Architecture":"amd64","Description":"","State":"ii ","Version":"0.6.55-0ubuntu12~20.04.5"}}'
         # Remove trailing comma from the last line
         #OS_DPKG_STR=$(echo "${OS_DPKG_STR}" | sed 's/,\s$/ /')
         # Enclose the OS_DPKG_STR in curly braces to create a JSON object
         #OS_DPKG_DATA=$(echo "${OS_DPKG_STR}")
         # dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
         # hostname="$(hostname)"
-	# OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
-        # OS_DPKG_DATA=( $OS_DPKG_STR )
+	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
+        OS_DPKG_DATA=( $OS_DPKG_STR )
         diary_report \
                 "diaryEventStatus=$?" \
                 "diaryEventType=diary_flex" \
