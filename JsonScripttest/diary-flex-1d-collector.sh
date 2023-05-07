@@ -78,7 +78,7 @@ collect_os_dpkg() {
 debug_event_params() {
     echo "[$(date)] Debug Event parameter OS_DPKG_DATA"
 
-    echo $OS_DPKG_DATA
+    echo "$OS_DPKG_JSON"
 }
 main() {
 	#Collect uname
