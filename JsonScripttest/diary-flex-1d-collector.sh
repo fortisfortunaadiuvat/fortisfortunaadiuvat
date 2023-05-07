@@ -65,14 +65,14 @@ collect_os_dpkg() {
         #OS_DPKG_DATA=$(echo "${OS_DPKG_STR}")
         dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
         # hostname="$(hostname)"
-	OS_DPKG_STR=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
-        OS_DPKG_DATA=( $OS_DPKG_STR )
-        diary_report \
-                "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex" \
-                "diaryEventSourceType=diary_flex_os_dpkg" \
-                "diaryEventActor=diary-flex-1d-collector.sh" \
-                "dpkgData=$OS_DPKG_STR"
+	OS_DPKG_JSON=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packages: .}' -c )
+	OS_DPKG_DATA=( $OS_DPKG_JSON )
+	diary_report \
+        "diaryEventStatus=$?" \
+        "diaryEventType=diary_flex" \
+        "diaryEventSourceType=diary_flex_os_dpkg" \
+        "diaryEventActor=diary-flex-1d-collector.sh" \
+        "Packages=$OS_DPKG_JSON"
 }
 
 debug_event_params() {
