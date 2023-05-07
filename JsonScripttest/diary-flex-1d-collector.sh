@@ -72,7 +72,7 @@ collect_os_dpkg() {
                 "diaryEventType=diary_flex" \
                 "diaryEventSourceType=diary_flex_os_dpkg" \
                 "diaryEventActor=diary-flex-1d-collector.sh" \
-                "$OS_DPKG_STR"
+                "'$OS_DPKG_STR'"
 }
 
 debug_event_params() {
