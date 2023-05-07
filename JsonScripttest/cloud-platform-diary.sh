@@ -15,12 +15,12 @@ sync_diary() {
     echo "$JSON_DATA_SOURCE"
     #JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
 
-    if [[ "$JSON_DATA_SOURCE" == *"="* ]]; then
-        # format 1: space-separated key-value pairs
-        JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
+    if [[ "$JSON_DATA_SOURCE" == *"dpkgData="* ]]; then
+    # Parse dpkgData as JSON
+    JSON_CUSTOM_DATA=$(echo "$JSON_DATA_SOURCE" | sed 's/dpkgData=//')
     else
-        # format 2: JSON object
-        JSON_CUSTOM_DATA=$(jq -c '.' <<< "$JSON_DATA_SOURCE")
+    # Use the existing logic to parse the JSON
+    JSON_CUSTOM_DATA=$(jq -R 'split(" ") | map( index("=") as $i | {(.[0:$i]) : .[$i+1:]}) | add' <<< "$JSON_DATA_SOURCE")
     fi
     echo "[$(date)] Debug Event parameter Cloud Platform Diary.sh"
     echo "${JSON_DATA_SOURCE}" 
