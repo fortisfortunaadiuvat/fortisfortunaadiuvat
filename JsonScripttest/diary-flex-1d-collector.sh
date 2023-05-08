@@ -13,6 +13,8 @@ diary_report() {
     MODULE_PATH="/tmp/.diary"
     MODULE_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/main/JsonScripttest/$MODULE_FILENAME"
     MODULE_PARAMS=$(echo "$@")
+    echo "[$(date)] Debug Event parameter MODULE_PARAMS"
+    echo "$MODULE_PARAMS"
 
     if [ $(( ( $(date +%s) - $(stat -L --format %Y $MODULE_PATH/$MODULE_FILENAME 2>/dev/null || printf '0') ) > 60 )) -eq 1 ]; then
         wget --wait=3 --tries=2 -N "$MODULE_URL" -P "$MODULE_PATH" 2>/dev/null
