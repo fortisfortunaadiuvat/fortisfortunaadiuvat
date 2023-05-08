@@ -82,19 +82,37 @@ collect_os_lsb_release() {
                 "release=${OS_LSB_RELEASE_DATA[8]}" \
                 "codename=${OS_LSB_RELEASE_DATA[10]}"
 }
-collect_os_listen_port() {
-        OS_LISTEN_PORT_DATA=$(netstat -tulpn)
-        while read -r line; do
-                diary_report \
-                "diaryEventStatus=$?" \
-                "diaryEventType=diary_flex" \
-                "diaryEventSourceType=diary_flex_os_LISTEN_PORT" \
-                "diaryEventActor=diary-flex-1d-collector.sh" \
-                "tcp_protocol=$(echo "$line" | awk '{gsub(/ /,"",$1);print $1}')" \
-                "service_name=$(echo "$line" | awk '{gsub(/ /,"",$NF);print $NF}')" \
-                "port_number=$(echo "$line" | awk '{print $4}' | cut -d ':' -f2' )" 
-        done <<< "$OS_LISTEN_PORT_DATA"
+
+collect_os_dpkg() {
+        dpkg_output="$(dpkg -l | grep collec | tail -n +6)"
+        OS_DPKG_JSON=$(awk '{print "{\"Package\":\""$2"\",\"Version\":\""$3"\",\"Architecture\":\""$4"\"}"}' <<< "$dpkg_output" | jq -s '{Packagaes: .}' -c )
+        OS_DPKG_DATA=( $OS_DPKG_JSON )
+
+        formatted_json=$(printf "%q" "$OS_DPKG_JSON")  # Properly format the JSON string
+
+        diary_report \
+            "diaryEventStatus=$?" \
+            "diaryEventType=diary_flex" \
+            "diaryEventSourceType=diary_flex_os_dpkg" \
+            "diaryEventActor=diary-flex-1d-collector.sh" \
+            "Packages=$formatted_json"   # Pass the formatted JSON string as a parameter
 }
+#
+#collect_os_listen_port() {
+#        OS_LISTEN_PORT_DATA=$(netstat -tulpn)
+#        while read -r line; do
+#                diary_report \
+#                "diaryEventStatus=$?" \
+#                "diaryEventType=diary_flex" \
+#                "diaryEventSourceType=diary_flex_os_LISTEN_PORT" \
+#                "diaryEventActor=diary-flex-1d-collector.sh" \
+#                "tcp_protocol=$(echo "$line" | awk '{gsub(/ /,"",$1);print $1}')" \
+#                "service_name=$(echo "$line" | awk '{gsub(/ /,"",$NF);print $NF}')" \
+#                "port_number=$(echo "$line" | awk '{print $4}' | cut -d ':' -f2' )" 
+#        done <<< "$OS_LISTEN_PORT_DATA"
+#}
+#
+
 
 
 
