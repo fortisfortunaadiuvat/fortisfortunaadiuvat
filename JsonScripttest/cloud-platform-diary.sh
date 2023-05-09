@@ -39,7 +39,8 @@ sync_diary() {
     # set new args for send event to cloud-platform-diary
     set -- $JSON_DIARY_TYPE $JSON_DIARY_SOURCE_TYPE $JSON_DIARY_ACTOR $JSON_DIARY_STATUS $JSON_DIARY_OPERATION_COMPANY $JSON_DIARY_MESH $JSON_DIARY_CUSTOM_DATA $JSON_DIARY_TIME_DURATION
     EVENT_DIARY_PARAMS="$@"
-
+    echo "[$(date)] Debug Event parameter Cloud Platform Diary.sh EVENT_DIARY_PARAMS "
+    echo $EVENT_DIARY_PARAMS
     # source diary-sdk-shell
     if [ $(( ( $(date +%s) - $(stat -L --format %Y $SDK_PATH/$SDK_FILENAME 2>/dev/null || printf '0') ) > 60 )) -eq 1 ]; then
         wget --wait=3 --tries=2 -N "$SDK_URL" -P "$SDK_PATH" 2>/dev/null
