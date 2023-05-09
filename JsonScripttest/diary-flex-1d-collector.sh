@@ -12,7 +12,7 @@ diary_report() {
     MODULE_FILENAME="cloud-platform-diary.sh"
     MODULE_PATH="/tmp/.diary"
     MODULE_URL="https://raw.githubusercontent.com/fortisfortunaadiuvat/fortisfortunaadiuvat/main/JsonScripttest/$MODULE_FILENAME"
-    MODULE_PARAMS=$(echo "$@")
+    MODULE_PARAMS="$@"
     echo "[$(date)] Debug Event parameter MODULE_PARAMS"
     echo "$MODULE_PARAMS"
 
